@@ -1,158 +1,115 @@
 #!/usr/bin/env python3
-
-import atexit
-import json
-import shutil
+# Based on: https://github.com/r-bar/activity-browser
 import sys
 import os
-from argparse import ArgumentParser
-from collections import defaultdict
-from pathlib import Path
-from subprocess import run, Popen
+import json
+import subprocess
+import shutil
 
+distro = "activity-browser"
+configDir = os.path.join(os.environ.get("XDG_CONFIG_DIR",os.path.join(os.environ["HOME"],".config")),distro) # $XDG_CONFIG_DIR/$distro or $HOME/.config/$distro
+configFile = os.path.join(configDir,"config.json")
 
-APP_NAME = 'activity-browser'
+# If the program string contains the string on the right, it is identified as the browser on the left. First match is used.
+programTranslation = [
+	# Specific browsers:
+	["firefox","waterfox"],
+	["firefox","seamonkey"],
+	["firefox","palemoon"],
+	["chromium","vivaldi"],
+	["chromium","opera"],
+	
+	# General
+	["firefox","fox"],
+	["chromium","chrom"]
+]
 
+defaults = {
+	"program": "firefox",
+	"profile": None
+}
 
-def default_profile(activity, program):
-    return Config().profile_map[activity].get(program)
+# COMMANDS
+command = {}
+def f():
+	config[activityID]["program"] = args[1]
+	saveConfig()
+	return 0
+command["ab.set-program"] = f
 
+def f():
+	config[activityID]["profile"] = args[1]
+	saveConfig()
+	return 0
+command["ab.set-profile"] = f
 
-def get_activity_id():
-    cmd = [
-        'dbus-send', '--session', '--dest=org.kde.ActivityManager',
-        '--type=method_call', '--print-reply=literal',
-        '/ActivityManager/Activities',
-        'org.kde.ActivityManager.Activities.CurrentActivity',
-    ]
-    proc = run(cmd, check=True, capture_output=True, text=True)
-    return proc.stdout.strip()
+def f():
+	config[activityID]["profile"] = None
+	saveConfig()
+	return 0
+command["ab.clear-profile"] = f
 
+def f():
+	print(json.dumps(config,indent=2,sort_keys=True))
+	return 0
+command["ab.show-config"] = f
 
-class Cmd:
-    PROGRAMS = {
-        'firefox': 'firefox',
-        'firefox-nightly': 'firefox',
-        'chromium': 'chromium',
-    }
+# LAUNCHERS
+browserLauncher = {}
+def f():
+	global args, programPath
+	if config[activityID]["profile"] != None: args = ["-P",config[activityID]["profile"]] + args
+	args = [config[activityID]["program"]] + args
+	os.execv(programPath,args)
+browserLauncher["firefox"] = f
 
-    @classmethod
-    def cmd(cls, program, profile, private=False, **kwargs):
-        fn = getattr(cls, cls.PROGRAMS[program])
-        return fn(program, profile, **kwargs)
+def f():
+	global args, programPath
+	if config[activityID]["profile"] != None: args = ["--user-data-dir=" + config[activityID]["profile"]] + args
+	args = [config[activityID]["program"]] + args
+	os.execv(programPath,args)
+browserLauncher["chromium"] = f
 
-    @classmethod
-    def default_program(cls):
-        for prog in cls.PROGRAMS:
-            if shutil.which(prog):
-                return prog
+# MISC
+def getProgramType(command):
+	command = command.rsplit(os.path.sep,1)[-1]
+	for program in programTranslation:
+		if program[1] in command: return True,program[0]
+	return False,"firefox"
 
-    @staticmethod
-    def firefox(program, profile, private=False, **kwargs):
-        cmd = [program]
-        if profile:
-            cmd += ['-P', profile]
-        if private:
-            cmd += ['--private-window']
-        return cmd
+def getActivityID():
+	cmd = [
+		'dbus-send', '--session', '--dest=org.kde.ActivityManager',
+		'--type=method_call', '--print-reply=literal',
+		'/ActivityManager/Activities',
+		'org.kde.ActivityManager.Activities.CurrentActivity',
+	]
+	proc = subprocess.Popen(cmd, stdout=subprocess.pipe)
+	if proc.wait() != 0: raise subprocess.CalledProcessError
+	return proc.stdout.strip()
 
-
-class Config:
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance:
-            return cls._instance
-        instance = super().__new__(cls)
-
-        file = cls.config_file()
-        if file.is_file():
-            with open(file) as fp:
-                instance.__dict__ = json.load(fp)
-            profile_map = instance.profile_map
-            instance.profile_map = defaultdict(dict)
-            instance.profile_map.update(profile_map)
-        else:
-            instance.profile_map = defaultdict(dict)
-            instance.default_program = Cmd.default_program()
-
-        atexit.register(instance.save)
-        cls._instance = instance
-
-        return instance
-
-    @staticmethod
-    def config_file(filename='config.json'):
-        config_dir = os.environ.get('XDG_CONFIG_DIR', Path.home() / '.config')
-        return Path(config_dir) / APP_NAME / filename
-
-    def save(self):
-        file = self.config_file()
-        file.parent.mkdir(parents=True, exist_ok=True)
-        with open(file, 'w') as fp:
-            fp.write(str(self))
-
-    def __str__(self):
-        return json.dumps(self.__dict__, indent=2)
-
-
-def cli() -> ArgumentParser:
-    p = ArgumentParser()
-    p.add_argument('--private', action='store_true')
-    p.add_argument('--program')
-    p.add_argument('--profile')
-    sub = p.add_subparsers(dest='command')
-    set_profile = sub.add_parser('set-profile')
-    set_profile.add_argument('program')
-    set_profile.add_argument('profile')
-    set_default_program = sub.add_parser('set-default-program')
-    set_default_program.add_argument('program')
-    sub.add_parser('show-config')
-    return p
-
-
-def command_set_profile(args):
-    activity = get_activity_id()
-    Config().profile_map[activity][args.program] = args.profile
-
-
-def command_set_default_program(args):
-    Config().default_program = args.program
-
-
-def command_show_config(args):
-    print(Config())
-
-
-def command_launch(args, browser_args):
-    program = args.program or Config().default_program
-    activity = get_activity_id()
-    try:
-        profile = args.profile or default_profile(activity, program)
-    except KeyError:
-        print('No profile set for this activity', file=sys.stderr)
-        exit(1)
-    try:
-        cmd = Cmd.cmd(program, profile, private=args.private)
-    except AttributeError:
-        print(f'{APP_NAME} does not know how to handle {program}',
-              file=sys.stderr)
-        exit(1)
-    print(cmd)
-    Popen(cmd + browser_args)
-
-
-def main():
-    args, browser_args = cli().parse_known_args()
-    commands = {
-        'set-default-program': command_set_default_program,
-        'set-profile': command_set_profile,
-        'show-config': command_show_config,
-    }
-    if args.command in commands:
-        return commands[args.command](args)
-    command_launch(args, browser_args)
-
+def saveConfig():
+	with open(configFile,"w") as f:
+		f.write(json.dumps(config,indent=2,sort_keys=True))
 
 if __name__ == '__main__':
-    main()
+	activityID = getActivityID()
+	if not os.path.isdir(configDir): os.makedirs(configDir)
+	if not os.path.isfile(configFile):
+		with open(configFile,"w") as f: f.write("{}")
+	config = json.loads(open(configFile,"r").read())
+	if not activityID in config:
+		print("Activity not found, saving defaults ...")
+		config[activityID] = defaults
+		saveConfig()
+	
+	programFound,programType = getProgramType(config[activityID]["program"])
+	if programFound == False:
+		print(config[activityID]["program"]+ " could not be identified, assuming it to be " +programType+ ".")
+	
+	args = sys.argv[1:]
+	if len(args) > 0 and args[0] in command:
+		sys.exit(command[args[0]]())
+	
+	programPath = shutil.which(config[activityID]["program"])
+	browserLauncher[programType]()
