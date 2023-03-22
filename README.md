@@ -36,11 +36,11 @@ To set the profile to use for the activity switch to the activity you want to
 change then open a terminal and run the following command.
 
 ```
-activity-browser ab.set-profile firefox work
+activity-browser ab.set-profile work
 ```
 
-This will set the Firefox browser to open the `work` profile for this activity
-for now on. You can change the default profile at any time by rerunning the
+This will set the browser to open the `work` profile for this activity from
+now on. You can change the default profile at any time by rerunning the
 command and specifying a different profile to use.
 
 
@@ -53,4 +53,4 @@ settings. The default storage location for the config file is
 
 ### Launching the browser
 Activity browser will use the default browser to launch the profile specified
-for the activity by default. Otherwise it will launch the default browser
+for the activity by default. Otherwise it will launch Firefox
