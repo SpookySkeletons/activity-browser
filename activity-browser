@@ -13,7 +13,6 @@ configFile = os.path.join(configDir,"config.json")
 # If the program string contains the string on the right, it is identified as the browser on the left. First match is used.
 programTranslation = [
 	# Specific browsers:
-	["firefox","waterfox"],
 	["firefox","seamonkey"],
 	["firefox","palemoon"],
 	["chromium","vivaldi"],
