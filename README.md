@@ -19,11 +19,15 @@ activities you want to use and create the corresponding browser profiles.
 
 ### Creating Profiles
 
-**Firefox**
+**Firefox-based browsers**  
 Navigate to [about:profiles](about:profiles) and click the "Create a new
 profile" button to create a new profile. After you are done creating profiles
 make sure the global default session is set using the "Set as default profile"
 below the corresponding profile entry.
+
+**Chromium-based browsers**  
+Chromium with automatically create whatever profile you've set with
+ab.set-profile.
 
 
 ### Setting the default browser to use
@@ -53,4 +57,4 @@ settings. The default storage location for the config file is
 
 ### Launching the browser
 Activity browser will use the default browser to launch the profile specified
-for the activity by default. Otherwise it will launch Firefox
+for the activity by default. Otherwise it will launch Firefox.
