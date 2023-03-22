@@ -83,9 +83,9 @@ def getActivityID():
 		'/ActivityManager/Activities',
 		'org.kde.ActivityManager.Activities.CurrentActivity',
 	]
-	proc = subprocess.Popen(cmd, stdout=subprocess.pipe)
+	proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
 	if proc.wait() != 0: raise subprocess.CalledProcessError
-	return proc.stdout.strip()
+	return proc.stdout.read().strip().decode("utf-8")
 
 def saveConfig():
 	with open(configFile,"w") as f:
