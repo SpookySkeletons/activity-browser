@@ -64,7 +64,7 @@ browserLauncher["firefox"] = f
 
 def f():
 	global args, programPath
-	if config[activityID]["profile"] != None: args = ["--user-data-dir=" + config[activityID]["profile"]] + args
+	if config[activityID]["profile"] != None: args = ["--profile-directory=" + config[activityID]["profile"]] + args
 	args = [config[activityID]["program"]] + args
 	os.execv(programPath,args)
 browserLauncher["chromium"] = f
